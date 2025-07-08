@@ -2,6 +2,7 @@ from ml.trainer import train_buy_model
 from config.db import get_db
 from datetime import datetime
 import yfinance as yf
+import pandas as pd
 
 def basic_recommendation(change):
     if change is None:
@@ -23,11 +24,15 @@ def smart_recommendation(ticker="AAPL", registrar=False):
         return "No hay datos recientes para predecir."
 
     latest = data.iloc[-1]
-    row = [[
-        latest["Open"], latest["High"],
-        latest["Low"], latest["Close"], latest["Volume"]
-    ]]
     
+    row = pd.DataFrame([{
+        "Open": latest["Open"],
+        "High": latest["High"],
+        "Low": latest["Low"],
+        "Close": latest["Close"],
+        "Volume": latest["Volume"]
+    }])
+
     pred = model.predict(row)[0]
     recomendacion = "comprar" if pred == 1 else "no_comprar"
 
