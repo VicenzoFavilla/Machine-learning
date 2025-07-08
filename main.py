@@ -1,5 +1,6 @@
 from services.stocks import get_stock_info
 from ml.recomendacion import basic_recommendation, smart_recommendation
+from config.db import get_db
 
 def main():
     print("=== ASESOR DE INVERSIONES ===")
@@ -15,8 +16,17 @@ def main():
 
             usar_ml = input("\n🤖 ¿Querés usar ML para predecir si conviene comprar? (s/n): ").lower()
             if usar_ml == "s":
-                ml_recomendacion = smart_recommendation(ticker)
+                ml_recomendacion = smart_recommendation(ticker, registrar= True)
                 print(f"\n📊 Recomendación con ML: {ml_recomendacion}")
+
+
+                decision = input("🧾 ¿Qué hiciste? (compré / no compré / skip): ").strip().lower()
+                if decision in ["compré", "no compré"]:
+                    db = get_db()
+                    db.acciones_usuario.update_one(
+                        {"ticker": ticker, "decision_usuario": None},
+                        {"$set": {"decision_usuario": decision}}
+                    )
 
 if __name__ == "__main__":
     main()
