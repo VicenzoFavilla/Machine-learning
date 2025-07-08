@@ -1,4 +1,6 @@
 from ml.trainer import train_buy_model
+from config.db import get_db
+from datetime import datetime
 import yfinance as yf
 
 def basic_recommendation(change):
@@ -13,7 +15,7 @@ def basic_recommendation(change):
         return "🚀 El precio subió bastante. Tal vez sea mejor esperar una baja."
 
 
-def smart_recommendation(ticker="AAPL"):
+def smart_recommendation(ticker="AAPL", registrar=False):
     model = train_buy_model(ticker)
     data = yf.Ticker(ticker).history(period="1d")
     
@@ -27,6 +29,19 @@ def smart_recommendation(ticker="AAPL"):
     ]]
     
     pred = model.predict(row)[0]
+    recomendacion = "comprar" if pred == 1 else "no_comprar"
+
+    if registrar:
+        db = get_db()
+        db.acciones_usuario.insert_one({
+            "ticker": ticker,
+            "fecha": datetime.now(),
+            "precio": latest["Close"],
+            "recomendacion_ml": recomendacion,
+            "decision_usuario": None,  # luego lo podés actualizar
+            "modelo_usado": "random_forest",
+            "contexto": "modelo inicial sin feedback"
+        })
 
     if pred == 1:
         return "🟢 El modelo predice que el precio subirá. Podría ser buen momento para comprar."
