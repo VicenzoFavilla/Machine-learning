@@ -1,4 +1,4 @@
-from ml.trainer import train_buy_model
+from ml.trainer import train_buy_model_optimizado
 from config.db import get_db
 from datetime import datetime
 import yfinance as yf
@@ -17,23 +17,40 @@ def basic_recommendation(change):
 
 
 def smart_recommendation(ticker="AAPL", registrar=False):
-    model = train_buy_model(ticker)
-    data = yf.Ticker(ticker).history(period="1d")
-    
-    if data.empty:
-        return "No hay datos recientes para predecir."
+    model, accuracy = train_buy_model_optimizado(ticker)
+    if accuracy < 0.70:
+        return f"⚠️ La precisión del modelo es del {accuracy:.2f}.\nNo es recomendable comprar basándose en esta predicción."
 
-    latest = data.iloc[-1]
-    
-    row = pd.DataFrame([{
-        "Open": latest["Open"],
-        "High": latest["High"],
-        "Low": latest["Low"],
-        "Close": latest["Close"],
-        "Volume": latest["Volume"]
-    }])
+    stock = yf.Ticker(ticker)
+    data = stock.history(period="2y")  # suficiente para cálculos
 
-    pred = model.predict(row)[0]
+    if data.empty or len(data) < 15:
+        return "No hay suficientes datos para predecir."
+
+    # Crear los mismos indicadores técnicos usados en el entrenamiento
+    df = data.copy()
+    df["Return"] = df["Close"].pct_change()
+    df["MA5"] = df["Close"].rolling(5).mean()
+    df["MA10"] = df["Close"].rolling(10).mean()
+    df["Volatility"] = df["Close"].rolling(5).std()
+    df["EMA12"] = df["Close"].ewm(span=12).mean()
+    df["EMA26"] = df["Close"].ewm(span=26).mean()
+    df["MACD"] = df["EMA12"] - df["EMA26"]
+    df["RSI"] = 100 - (100 / (1 + df["Return"].rolling(14).mean() / df["Return"].rolling(14).std()))
+    df["Momentum"] = df["Close"] - df["Close"].shift(5)
+
+    df.dropna(inplace=True)
+    if df.empty:
+        return "No hay suficientes datos válidos después del procesamiento."
+
+    row = df.iloc[-1][["Open", "High", "Low", "Close", "Volume", "Return", "MA5", "MA10", "Volatility"]]
+    row_df = pd.DataFrame([row])
+
+    try:
+        pred = model.predict(row_df)[0]
+    except Exception as e:
+        return f"Error al predecir: {e}"
+
     recomendacion = "comprar" if pred == 1 else "no_comprar"
 
     if registrar:
@@ -41,11 +58,11 @@ def smart_recommendation(ticker="AAPL", registrar=False):
         db.acciones_usuario.insert_one({
             "ticker": ticker,
             "fecha": datetime.now(),
-            "precio": latest["Close"],
+            "precio": row["Close"],
             "recomendacion_ml": recomendacion,
-            "decision_usuario": None,  # luego lo podés actualizar
-            "modelo_usado": "random_forest",
-            "contexto": "modelo inicial sin feedback"
+            "decision_usuario": None,
+            "modelo_usado": "xgboost_v2",
+            "contexto": "modelo optimizado con indicadores tecnicos"
         })
 
     if pred == 1:
