@@ -9,11 +9,11 @@ def train_buy_model_optimizado(ticker="AAPL", periodo="2y"):
     stock = yf.Ticker(ticker)
     df = stock.history(period=periodo)
 
-    df["Return"] = df["Close"].pct_change()
-    df["MA5"] = df["Close"].rolling(5).mean()
-    df["MA10"] = df["Close"].rolling(10).mean()
-    df["Volatility"] = df["Close"].rolling(5).std()
-    df["Target"] = (df["Close"].shift(-1) > df["Close"] * 1.01).astype(int)
+    df["Return"] = df["Close"].pct_change() #retorno diario procedural
+    df["MA5"] = df["Close"].rolling(5).mean() # media movil 5 dias
+    df["MA10"] = df["Close"].rolling(10).mean() #media movil 10 dias
+    df["Volatility"] = df["Close"].rolling(5).std() # volatilidad 5 dias
+    df["Target"] = (df["Close"].shift(-1) > df["Close"] * 1.01).astype(int) # objetivo: si el cierre del dia siguiente es mayor al 1% del cierre actual
 
     df.dropna(inplace=True)
 

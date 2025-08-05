@@ -25,9 +25,9 @@ def get_stock_info(ticker):
     print(f"Volumen: {volume}")
 
     # Historial de 7 días
-    hist = stock.history(period="7d")
+    hist = stock.history(period="15d")
     if not hist.empty:
-        hist["Close"].plot(title=f"Precio de cierre - Últimos 7 días ({ticker.upper()})")
+        hist["Close"].plot(title=f"Precio de cierre - Últimos 30 días ({ticker.upper()})")
         plt.ylabel("Precio ($)")
         plt.grid(True)
         plt.tight_layout()

@@ -12,12 +12,12 @@ def main():
         info = get_stock_info(ticker)
         if info:
             recomendacion = basic_recommendation(info["change"])
-            print(f"\n🧠 Recomendación básica: {recomendacion}")
+            print(f"\n Recomendación básica: {recomendacion}")
 
-            usar_ml = input("\n🤖 ¿Querés usar ML para predecir si conviene comprar? (s/n): ").lower()
+            usar_ml = input("\n ¿Querés usar Machine Learning para predecir si conviene comprar? (s/n): ").lower()
             if usar_ml == "s":
                 ml_recomendacion = smart_recommendation(ticker, registrar= True)
-                print(f"\n📊 Recomendación con ML: {ml_recomendacion}")
+                print(f"\n📊 Recomendación con Machine Learninig: {ml_recomendacion}")
 
 
                 decision = input("🧾 ¿Qué hiciste? (compré / no compré / skip): ").strip().lower()

@@ -1,4 +1,4 @@
-#!C:\Users\vitii\acciones_predict\Machine-learning\acciones_ML\scripts\python.exe
+#!C:\Users\vitif\OneDrive\Desktop\proyecto-ml\Machine-learning\acciones_ML\Scripts\python.exe
 
 import datetime
 import os
