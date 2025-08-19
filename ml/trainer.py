@@ -1,6 +1,8 @@
 # ml/trainer_optimizado.py
 import yfinance as yf
 import pandas as pd
+import joblib
+import os
 from xgboost import XGBClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
@@ -13,7 +15,7 @@ def train_buy_model_optimizado(ticker="AAPL", periodo="2y"):
     df["MA5"] = df["Close"].rolling(5).mean() # media movil 5 dias
     df["MA10"] = df["Close"].rolling(10).mean() #media movil 10 dias
     df["Volatility"] = df["Close"].rolling(5).std() # volatilidad 5 dias
-    df["Target"] = (df["Close"].shift(-1) > df["Close"] * 1.01).astype(int) # objetivo: si el cierre del dia siguiente es mayor al 1% del cierre actual
+    df["Target"] = (df["Close"].shift(-1) > df["Close"] * 1.01).astype(int) #
 
     df.dropna(inplace=True)
 
@@ -28,5 +30,9 @@ def train_buy_model_optimizado(ticker="AAPL", periodo="2y"):
     y_pred = model.predict(X_test)
     accuracy = accuracy_score(y_test, y_pred)
     print(f"Precisión del modelo ({ticker}): {accuracy:.2f}")
+
+    #guarda el modelo entrenado en la base de datos
+    os.makedirs("models", exist_ok=True)
+    joblib.dump(model, f"models/{ticker}_buy_model_optimizado.pkl")
 
     return model, accuracy

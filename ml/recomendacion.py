@@ -3,6 +3,8 @@ from config.db import get_db
 from datetime import datetime
 import yfinance as yf
 import pandas as pd
+import os
+import joblib
 
 def basic_recommendation(change):
     if change is None:
@@ -15,19 +17,28 @@ def basic_recommendation(change):
     else:
         return "🚀 El precio subió bastante. Tal vez sea mejor esperar una baja."
 
-
 def smart_recommendation(ticker="AAPL", registrar=False):
-    model, accuracy = train_buy_model_optimizado(ticker)
-    if accuracy < 0.70:
+    model_path = f"modelos/{ticker}_modelo_xgb.joblib"
+    accuracy = None
+
+    if os.path.exists(model_path):
+        model = joblib.load(model_path)
+        print(f"[INFO] Modelo cargado desde {model_path}")
+    else:
+        model, accuracy = train_buy_model_optimizado(ticker)
+        os.makedirs("modelos", exist_ok=True)
+        joblib.dump(model, model_path)
+        print(f"[INFO] Modelo entrenado y guardado en {model_path}")
+
+    if accuracy is not None and accuracy < 0.80:
         return f"⚠️ La precisión del modelo es del {accuracy:.2f}.\nNo es recomendable comprar basándose en esta predicción."
 
     stock = yf.Ticker(ticker)
-    data = stock.history(period="2y")  # suficiente para cálculos
+    data = stock.history(period="2y")
 
     if data.empty or len(data) < 15:
         return "No hay suficientes datos para predecir."
 
-    # Crear los mismos indicadores técnicos usados en el entrenamiento
     df = data.copy()
     df["Return"] = df["Close"].pct_change()
     df["MA5"] = df["Close"].rolling(5).mean()
@@ -43,7 +54,10 @@ def smart_recommendation(ticker="AAPL", registrar=False):
     if df.empty:
         return "No hay suficientes datos válidos después del procesamiento."
 
-    row = df.iloc[-1][["Open", "High", "Low", "Close", "Volume", "Return", "MA5", "MA10", "Volatility"]]
+    row = df.iloc[-1][[
+        "Open", "High", "Low", "Close", "Volume",
+        "Return", "MA5", "MA10", "Volatility"
+    ]]
     row_df = pd.DataFrame([row])
 
     try:
@@ -53,8 +67,9 @@ def smart_recommendation(ticker="AAPL", registrar=False):
 
     recomendacion = "comprar" if pred == 1 else "no_comprar"
 
+    db = get_db()
+
     if registrar:
-        db = get_db()
         db.acciones_usuario.insert_one({
             "ticker": ticker,
             "fecha": datetime.now(),
@@ -62,8 +77,23 @@ def smart_recommendation(ticker="AAPL", registrar=False):
             "recomendacion_ml": recomendacion,
             "decision_usuario": None,
             "modelo_usado": "xgboost_v2",
-            "contexto": "modelo optimizado con indicadores tecnicos"
+            "contexto": "modelo optimizado con indicadores tecnicos",
+            "parametros_modelo": {
+                "n_estimators": 150,
+                "learning_rate": 0.05,
+                "max_depth": 5
+            }
         })
+
+    # Registrar uso del modelo
+    db.modelos_uso.update_one(
+        {"ticker": ticker},
+        {
+            "$inc": {"veces_usado": 1},
+            "$set": {"ultima_vez": datetime.now()}
+        },
+        upsert=True
+    )
 
     if pred == 1:
         return "🟢 El modelo predice que el precio subirá. Podría ser buen momento para comprar."
