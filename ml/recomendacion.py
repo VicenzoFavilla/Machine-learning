@@ -3,8 +3,10 @@ from config.db import get_db
 from datetime import datetime
 import yfinance as yf
 import pandas as pd
-import os
 import joblib
+import io
+from bson.binary import Binary
+
 
 def basic_recommendation(change):
     if change is None:
@@ -17,21 +19,44 @@ def basic_recommendation(change):
     else:
         return "🚀 El precio subió bastante. Tal vez sea mejor esperar una baja."
 
+def guardar_modelo_en_mongo(ticker, modelo):
+    buffer = io.BytesIO()
+    joblib.dump(modelo, buffer)
+    buffer.seek(0)
+
+    db = get_db()
+    db.modelos_binarios.replace_one(
+        {"ticker": ticker},
+        {
+            "ticker": ticker,
+            "modelo": Binary(buffer.read()),
+            "ultima_actualizacion": datetime.now()
+        },
+        upsert=True
+    )
+    print(f"[INFO] Modelo para {ticker} guardado en MongoDB.")
+
+def cargar_modelo_de_mongo(ticker):
+    db = get_db()
+    doc = db.modelos_binarios.find_one({"ticker": ticker})
+    if doc and "modelo" in doc:
+        buffer = io.BytesIO(doc["modelo"])
+        modelo = joblib.load(buffer)
+        print(f"[INFO] Modelo para {ticker} cargado desde MongoDB.")
+        return modelo
+    return None
+
 def smart_recommendation(ticker="AAPL", registrar=False):
-    model_path = f"modelos/{ticker}_modelo_xgb.joblib"
+    db = get_db()
     accuracy = None
 
-    if os.path.exists(model_path):
-        model = joblib.load(model_path)
-        print(f"[INFO] Modelo cargado desde {model_path}")
-    else:
+    model = cargar_modelo_de_mongo(ticker)
+    if model is None:
         try:
             model, accuracy = train_buy_model_optimizado(ticker)
         except Exception as e:
             return f"No se pudo entrenar el modelo para {ticker}. Error: {e}"
-        os.makedirs("modelos", exist_ok=True)
-        joblib.dump(model, model_path)
-        print(f"[INFO] Modelo entrenado y guardado en {model_path}")
+        guardar_modelo_en_mongo(ticker, model)
 
     if accuracy is not None and accuracy < 0.80:
         return f"⚠️ La precisión del modelo es del {accuracy:.2f}.\nNo es recomendable comprar basándose en esta predicción."
@@ -70,8 +95,6 @@ def smart_recommendation(ticker="AAPL", registrar=False):
 
     recomendacion = "comprar" if pred == 1 else "no_comprar"
 
-    db = get_db()
-
     if registrar:
         db.acciones_usuario.insert_one({
             "ticker": ticker,
@@ -79,7 +102,7 @@ def smart_recommendation(ticker="AAPL", registrar=False):
             "precio": row["Close"],
             "recomendacion_ml": recomendacion,
             "decision_usuario": None,
-            "modelo_usado": "xgboost_v2",
+            "modelo_usado": "xgboost_v2_mongo",
             "contexto": "modelo optimizado con indicadores tecnicos",
             "parametros_modelo": {
                 "n_estimators": 150,
@@ -102,3 +125,4 @@ def smart_recommendation(ticker="AAPL", registrar=False):
         return "🟢 El modelo predice que el precio subirá. Podría ser buen momento para comprar."
     else:
         return "🔴 El modelo predice que el precio bajará. Mejor esperar."
+    return "No hay suficiente información para recomendar."
