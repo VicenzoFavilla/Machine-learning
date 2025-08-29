@@ -4,6 +4,9 @@ import matplotlib.pyplot as plt
 from config.db import get_db
 
 def get_stock_info(ticker):
+    if current_price is None or previous_close is None:
+        print("No se pudo obtener el precio actual o el cierre previo.")
+        return None
     stock = yf.Ticker(ticker)
 
     try:

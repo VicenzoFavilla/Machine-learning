@@ -25,7 +25,10 @@ def smart_recommendation(ticker="AAPL", registrar=False):
         model = joblib.load(model_path)
         print(f"[INFO] Modelo cargado desde {model_path}")
     else:
-        model, accuracy = train_buy_model_optimizado(ticker)
+        try:
+            model, accuracy = train_buy_model_optimizado(ticker)
+        except Exception as e:
+            return f"No se pudo entrenar el modelo para {ticker}. Error: {e}"
         os.makedirs("modelos", exist_ok=True)
         joblib.dump(model, model_path)
         print(f"[INFO] Modelo entrenado y guardado en {model_path}")

@@ -8,6 +8,8 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
 
 def train_buy_model_optimizado(ticker="AAPL", periodo="2y"):
+    if df.empty:
+        raise ValueError(f"No se pudo obtener datos para el ticker proporcionado. {ticker}")
     stock = yf.Ticker(ticker)
     df = stock.history(period=periodo)
 
