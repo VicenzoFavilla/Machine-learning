@@ -2,6 +2,6 @@ __pycache__/
 
 acciones_ML/
 
-models/
+ml/__pycache__
 
-modelos/
+services/__pycache__

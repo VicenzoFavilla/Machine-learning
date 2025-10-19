@@ -1,40 +1,82 @@
-# ml/trainer_optimizado.py
-import yfinance as yf
-import pandas as pd
-import joblib
-import os
-from xgboost import XGBClassifier
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score
+"""Entrenamiento del modelo local por ticker (XGBoost).
 
-def train_buy_model_optimizado(ticker="AAPL", periodo="2y"):
-    if df.empty:
-        raise ValueError(f"No se pudo obtener datos para el ticker proporcionado. {ticker}")
+Incluye validación temporal, early stopping y manejo de desbalance.
+"""
+import os
+import joblib
+import yfinance as yf
+from xgboost import XGBClassifier
+from sklearn.metrics import accuracy_score, roc_auc_score
+
+from ml.features import add_basic_features, make_supervised, get_X_y
+
+
+def _train_val_split_time(X, y, val_size=0.2):
+    """Split temporal simple (80/20 por defecto)."""
+    n = len(X)
+    split = int(n * (1 - val_size))
+    return X.iloc[:split], X.iloc[split:], y.iloc[:split], y.iloc[split:]
+
+
+def _compute_scale_pos_weight(y):
+    """Calcula scale_pos_weight según el desbalance observado."""
+    pos = int((y == 1).sum())
+    neg = int((y == 0).sum())
+    if pos == 0:
+        return 1.0
+    return max(1.0, neg / max(1, pos))
+
+
+def train_buy_model_optimizado(ticker="AAPL", periodo="6m"):
+    """Entrena/actualiza un modelo XGBoost local para un ticker.
+
+    Retorna (modelo, precisión en validación).
+    """
     stock = yf.Ticker(ticker)
     df = stock.history(period=periodo)
+    if df.empty:
+        raise ValueError(f"No se pudo obtener datos para el ticker proporcionado. {ticker}")
 
-    df["Return"] = df["Close"].pct_change() #retorno diario procedural
-    df["MA5"] = df["Close"].rolling(5).mean() # media movil 5 dias
-    df["MA10"] = df["Close"].rolling(10).mean() #media movil 10 dias
-    df["Volatility"] = df["Close"].rolling(5).std() # volatilidad 5 dias
-    df["Target"] = (df["Close"].shift(-1) > df["Close"] * 1.01).astype(int) #
+    df = add_basic_features(df)
+    df = make_supervised(df, up_pct=0.01)
 
-    df.dropna(inplace=True)
+    X, y = get_X_y(df)
+    X_train, X_val, y_train, y_val = _train_val_split_time(X, y, val_size=0.2)
 
-    X = df[["Open", "High", "Low", "Close", "Volume", "Return", "MA5", "MA10", "Volatility"]]
-    y = df["Target"]
+    scale_pos_weight = _compute_scale_pos_weight(y_train)
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, shuffle=False)
+    model = XGBClassifier(
+        n_estimators=1000,
+        learning_rate=0.05,
+        max_depth=5,
+        subsample=0.8,
+        colsample_bytree=0.8,
+        reg_lambda=1.0,
+        gamma=0.0,
+        objective="binary:logistic",
+        eval_metric="auc",
+        scale_pos_weight=scale_pos_weight,
+        random_state=42,
+    )
 
-    model = XGBClassifier(n_estimators=150, learning_rate=0.05, max_depth=5)
-    model.fit(X_train, y_train)
+    model.fit(
+        X_train,
+        y_train,
+        eval_set=[(X_val, y_val)],
+        verbose=False,
+        early_stopping_rounds=50,
+    )
 
-    y_pred = model.predict(X_test)
-    accuracy = accuracy_score(y_test, y_pred)
-    print(f"Precisión del modelo ({ticker}): {accuracy:.2f}")
+    y_pred = model.predict(X_val)
+    try:
+        y_prob = model.predict_proba(X_val)[:, 1]
+        auc = roc_auc_score(y_val, y_prob)
+    except Exception:
+        auc = float("nan")
+    acc = accuracy_score(y_val, y_pred)
+    print(f"Precisión del modelo ({ticker}): {acc:.2f} | AUC: {auc:.3f}")
 
-    #guarda el modelo entrenado en la base de datos
     os.makedirs("models", exist_ok=True)
     joblib.dump(model, f"models/{ticker}_buy_model_optimizado.pkl")
 
-    return model, accuracy
+    return model, acc

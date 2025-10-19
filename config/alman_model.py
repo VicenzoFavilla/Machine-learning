@@ -1,3 +1,5 @@
+"""Persistencia de modelos en MongoDB como binarios."""
+
 from config.db import get_db
 from bson.binary import Binary
 import joblib
@@ -5,6 +7,7 @@ import io
 from datetime import datetime
 
 def guardar_modelo_en_mongo(ticker, modelo):
+    """Guarda un modelo serializado (joblib) en MongoDB bajo la clave ticker."""
     buffer = io.BytesIO()
     joblib.dump(modelo, buffer)
     buffer.seek(0)
@@ -23,6 +26,7 @@ def guardar_modelo_en_mongo(ticker, modelo):
 
 
 def cargar_modelo_de_mongo(ticker):
+    """Carga un modelo desde MongoDB (o None si no existe)."""
     db = get_db()
     doc = db.modelos_binarios.find_one({"ticker": ticker})
     if doc and "modelo" in doc:
